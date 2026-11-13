@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AgentForge — AI Builder</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#111a2e;--line:#26334c;--text:#e8eefc;--muted:#9aabc7;--accent:#7c6cff;--green:#45d6a0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#182448,#0b1020 60%);color:var(--text);font:15px system-ui,Segoe UI,Tahoma,Arial}
+header{height:auto;min-height:76px;padding:15px 22px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.brand{font-size:21px;font-weight:800}.brand span{color:var(--accent)}.settings{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,textarea,button{font:inherit;border-radius:10px;border:1px solid var(--line);background:#0c1426;color:var(--text);padding:11px}
+input{min-width:230px}button{cursor:pointer;background:var(--accent);border:0;font-weight:700}button:disabled{opacity:.5;cursor:wait}.ghost{background:#1c2942}.status{color:var(--muted);font-size:13px}
+main{display:grid;grid-template-columns:minmax(300px,1.1fr) minmax(300px,1fr);gap:14px;padding:14px;max-width:1600px;margin:auto}
+.panel{background:rgba(17,26,46,.94);border:1px solid var(--line);border-radius:16px;overflow:hidden;min-height:70vh}
+.panel h2{font-size:16px;margin:0;padding:15px 17px;border-bottom:1px solid var(--line)}
+.chat{padding:16px;display:flex;flex-direction:column;gap:12px}.hint{color:var(--muted);line-height:1.8}.prompt{width:100%;min-height:120px;resize:vertical}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row input{flex:1}.messages{display:flex;flex-direction:column;gap:9px;max-height:55vh;overflow:auto}
+.msg{padding:12px;border-radius:12px;background:#17243d;white-space:pre-wrap;line-height:1.7;overflow-wrap:anywhere}.msg.user{border-right:3px solid var(--accent)}.msg.agent{border-right:3px solid var(--green)}.msg.tool{font:12px ui-monospace,monospace;direction:ltr;text-align:left;color:#b9c9e6}
+.workspace{display:grid;grid-template-rows:1fr 1fr;min-height:70vh}.box{padding:12px 16px;overflow:auto}.box+ .box{border-top:1px solid var(--line)}.file{padding:6px 9px;border-radius:7px;background:#17243d;margin:5px 0;font:13px ui-monospace,monospace;direction:ltr;text-align:left}.empty{color:var(--muted);padding:12px}
+@media(max-width:850px){main{grid-template-columns:1fr}.panel{min-height:auto}.workspace{min-height:500px}header{align-items:flex-start}}
+</style></head>
+<body>
+<header><div class="brand">⚡ Agent<span>Forge</span> <small class="status">AI Builder & Executor</small></div>
+<div class="settings"><input id="apiKey" type="password" placeholder="Gemini API Key" autocomplete="off"><button class="ghost" id="saveKey">حفظ محلياً</button><span id="connection" class="status">غير متصل</span></div></header>
+<main>
+<section class="panel"><h2>مركز الأوامر والمحادثة</h2><div class="chat">
+<div class="hint">اكتب وصف التطبيق المطلوب. سيخطط Gemini ويستدعي الأدوات المسموحة لإنشاء ملفات فعلية داخل مساحة المشروع.</div>
+<div class="row"><input id="project" value="my-project" placeholder="اسم المشروع"></div>
+<textarea id="prompt" class="prompt" placeholder="مثال: أنشئ تطبيق مهام بسيطاً بواجهة عربية، وواجهة API باستخدام FastAPI، وقاعدة SQLite واختبارات أساسية."></textarea>
+<div class="row"><button id="run">▶ تنفيذ الطلب</button><button class="ghost" id="download" disabled>تنزيل المشروع ZIP</button></div>
+<div id="messages" class="messages"><div class="msg agent">مرحباً! أدخل مفتاح Gemini ثم اكتب طلبك لبدء البناء.</div></div>
+</div></section>
+<section class="panel"><h2>مساحة العمل والتنفيذ</h2><div class="workspace">
+<div class="box"><b>📁 شجرة الملفات</b><div id="files" class="empty">لا توجد ملفات بعد.</div></div>
+<div class="box"><b>⌁ سجل الأدوات</b><div id="logs" class="empty">سجل التنفيذ سيظهر هنا.</div></div>
+</div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const stored=localStorage.getItem("agentforge_gemini_key")||"";
+$("apiKey").value=stored;
+$("saveKey").onclick=()=>{localStorage.setItem("agentforge_gemini_key",$("apiKey").value.trim());$("connection").textContent="تم الحفظ محلياً";};
+async function health(){try{let r=await fetch("/api/health");let d=await r.json();$("connection").textContent=d.ok?"السيرفر متصل · "+d.model:"غير متصل"}catch{$("connection").textContent="السيرفر غير متاح"}}
+health();
+function message(text,kind="agent"){let e=document.createElement("div");e.className="msg "+kind;e.textContent=text;$("messages").appendChild(e);e.scrollIntoView({block:"end"});}
+function log(text){let e=document.createElement("div");e.className="file";e.textContent=text;$("logs").prepend(e);}
+function renderFiles(files){$("files").innerHTML="";if(!files.length){$("files").textContent="لا توجد ملفات بعد.";return}files.forEach(f=>{let e=document.createElement("div");e.className="file";e.textContent="📄 "+f;$("files").appendChild(e)})}
+$("run").onclick=async()=>{
+ const key=$("apiKey").value.trim(),prompt=$("prompt").value.trim(),project=$("project").value.trim();
+ if(!key){message("أدخل Gemini API Key أولاً.","agent");return}if(!prompt){message("اكتب وصف التطبيق المطلوب.","agent");return}
+ localStorage.setItem("agentforge_gemini_key",key);
+ $("run").disabled=true;$("download").disabled=true;$("logs").innerHTML="";message(prompt,"user");log("بدء جلسة الوكيل…");
+ try{
+  const res=await fetch("/api/run",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({api_key:key,prompt,project})});
+  const data=await res.json();if(!res.ok)throw new Error(data.detail||"فشل الطلب");
+  for(const ev of data.events||[]){
+   if(ev.type==="tool_start")log("CALL "+ev.tool+" "+JSON.stringify(ev.args));
+   else if(ev.type==="tool_result")log("OK "+ev.tool+" → "+JSON.stringify(ev.result).slice(0,1200));
+   else if(ev.type==="tool_error")log("ERROR "+ev.tool+" → "+ev.error);
+   else if(ev.type==="final")message(ev.text,"agent");
+  }
+  renderFiles(data.files||[]);$("download").disabled=false;
+ }catch(e){message("خطأ: "+e.message,"agent");log("فشل: "+e.message)}
+ finally{$("run").disabled=false}
+};
+$("download").onclick=()=>{const p=encodeURIComponent($("project").value.trim());location.href="/api/projects/"+p+"/download"};
+</script></body></html>
