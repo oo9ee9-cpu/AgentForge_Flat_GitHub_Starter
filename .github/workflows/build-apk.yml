@@ -17,11 +17,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Generate Gradle Wrapper
+        working-directory: ./android
+        run: gradle wrapper
+
       - name: Build APK with Gradle
         working-directory: ./android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        run: ./gradlew assembleDebug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
